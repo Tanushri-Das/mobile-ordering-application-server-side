@@ -34,44 +34,45 @@ async function run() {
       res.send(result);
     });
 
-    app.get("/search", async (req, res) => {
-      const { name, type, processor, memory, os, minPrice, maxPrice } =
-        req.query;
+    app.get("/search", async (req, resp) => {
+      const { key } = req.query;
+      let searchQuery = {};
 
-      const filter = {};
+      console.log("Received request with key:", key);
 
-      // Use $or to match any of the specified criteria
-      filter.$or = [];
-
-      if (name) filter.$or.push({ name: new RegExp(name, "i") });
-      if (processor) filter.$or.push({ processor: new RegExp(processor, "i") });
-
-      if (type) filter.type = type;
-      if (memory) filter.memory = memory;
-      if (os) filter.OS = os;
-
-      if (minPrice || maxPrice) {
-        filter.price = {};
-        if (minPrice) filter.price.$gte = parseFloat(minPrice);
-        if (maxPrice) filter.price.$lte = parseFloat(maxPrice);
+      if (!key) {
+        return resp.status(400).send("Missing search key parameter");
       }
 
-      console.log("Received parameters:", req.query);
-      console.log("Constructed filter:", filter);
+      // Check if the key starts with a dollar sign ('$')
+      if (key.startsWith("$")) {
+        searchQuery = {
+          price: key, // Search directly for the "money" field as a string
+        };
+      } else {
+        // If it doesn't start with a dollar sign, assume it's a regular search
+        searchQuery = {
+          $or: [
+            { name: { $regex: key, $options: "i" } },
+            { memory: { $regex: key, $options: "i" } },
+            { type: { $regex: key, $options: "i" } },
+            { processor: { $regex: key, $options: "i" } },
+            { OS: { $regex: key, $options: "i" } },
+          ],
+        };
+      }
 
-      const result = await productsCollection.find(filter).toArray();
-      res.send(result);
+      console.log("Search Query:", searchQuery);
+
+      const data = await productsCollection.find(searchQuery).toArray();
+
+      console.log("Filtered Products:", data);
+      resp.send(data);
     });
   } finally {
-    // Don't forget to close the connection when done
-    // Commented out for now as we want the server to keep running
-    // await client.close();
   }
 }
-
-// Run the application
 run().catch(console.dir);
-
 // Moved the root route outside of the run function
 app.get("/", (req, res) => {
   res.send("Mobile Ordering Application server side is running");
